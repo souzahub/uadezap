@@ -1,6 +1,6 @@
-// server.js - API tipo Evolution API
+// server.js - API tipo Evolution API (Corrigido para ESM)
+
 const express = require('express');
-const { makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const QRCode = require('qrcode');
 const axios = require('axios');
@@ -13,6 +13,24 @@ app.use('/auth', express.static('auth_info_baileys'));
 let sock = null;
 let qrCodeData = null;
 
+// === Variáveis do Baileys (serão preenchidas com import) ===
+let makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser;
+
+// === Carregar Baileys com import() dinâmico (ES Module) ===
+(async () => {
+    try {
+        const baileys = await import('@whiskeysockets/baileys');
+        makeWASocket = baileys.makeWASocket;
+        useMultiFileAuthState = baileys.useMultiFileAuthState;
+        DisconnectReason = baileys.DisconnectReason;
+        jidNormalizedUser = baileys.jidNormalizedUser;
+        console.log('✅ Baileys carregado com sucesso');
+    } catch (err) {
+        console.error('❌ Falha ao carregar Baileys:', err.message);
+    }
+})();
+// ==========================================================
+
 // === CONFIGURAÇÕES ===
 const API_KEY = process.env.API_KEY || 'minha123senha';
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL; // Opcional: envia msgs recebidas
@@ -21,6 +39,7 @@ const VERSION = '1.0.0';
 // === MIDDLEWARE DE AUTENTICAÇÃO ===
 const auth = (req, res, next) => {
     const key = req.headers['x-api-key'] || req.query.api_key;
+    if (!makeWASocket) return res.status(500).json({ error: 'API ainda carregando...' });
     if (key !== API_KEY) {
         return res.status(401).json({ error: 'Acesso negado. Chave inválida.' });
     }
@@ -56,6 +75,9 @@ app.get('/status', (req, res) => {
 
 // Conectar (gera QR Code)
 app.get('/connect', async (req, res) => {
+    if (!makeWASocket) {
+        return res.status(500).json({ error: 'Baileys ainda carregando...' });
+    }
     if (sock) return res.json({ status: 'already connected' });
 
     const { state, saveCreds } = await useMultiFileAuthState('./auth_info_baileys');
@@ -121,6 +143,9 @@ app.get('/connect', async (req, res) => {
 
 // Mostrar QR Code
 app.get('/qrcode', (req, res) => {
+    if (!makeWASocket) {
+        return res.status(500).send('<h3>❌ API carregando...</h3>');
+    }
     if (qrCodeData) {
         res.type('html');
         res.send(`<img src="${qrCodeData}" width="300" /><meta http-equiv="refresh" content="5" />`);

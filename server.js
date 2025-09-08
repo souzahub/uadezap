@@ -11,6 +11,7 @@ app.use('/auth', express.static('auth_info_baileys'));
 
 let sock = null;
 let qrCodeData = null;
+let processedMessageIds = new Set();
 
 // === Variáveis do Baileys (preenchidas via import dinâmico) ===
 let makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser;
@@ -34,7 +35,7 @@ let makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser;
 // === CONFIGURAÇÕES ===
 const API_KEY = process.env.API_KEY || 'minha123senha';
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || null;
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 
 // === MIDDLEWARE DE AUTENTICAÇÃO ===
 const auth = (req, res, next) => {
@@ -121,9 +122,19 @@ app.get('/connect', async (req, res) => {
 
         sock.ev.on('creds.update', saveCreds);
 
-        sock.ev.on('messages.upsert', async ({ messages }) => {
+        sock.ev.on('messages.upsert', async ({ messages, type }) => {
+            // Processar apenas notificações de novas mensagens
+            if (type !== 'notify') return;
             const msg = messages[0];
             if (!msg.key || msg.key.fromMe) return;
+
+            // Deduplicar por ID da mensagem (evita envios duplos ao webhook)
+            const messageId = msg.key.id;
+            if (messageId && processedMessageIds.has(messageId)) return;
+            if (messageId) {
+                processedMessageIds.add(messageId);
+                if (processedMessageIds.size > 2000) processedMessageIds.clear();
+            }
 
             const from = jidNormalizedUser(msg.key.remoteJid);
             const pushName = msg.pushName || 'Desconhecido';
@@ -143,6 +154,9 @@ app.get('/connect', async (req, res) => {
             };
 
             console.log('📩 Recebido:', messageData);
+
+            // Ignorar mensagens sem texto suportado (evita segundo evento com placeholder)
+            if (!messageData.text || messageData.text === '[Mídia ou tipo não suportado]') return;
 
             if (N8N_WEBHOOK_URL) {
                 try {

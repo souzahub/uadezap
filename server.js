@@ -52,15 +52,144 @@ const auth = (req, res, next) => {
 // Página inicial
 app.get('/', (req, res) => {
     res.send(`
-        <h1>🚀 Uadezap API v${VERSION}</h1>
-        <p>Status: <strong>${sock ? 'Conectado' : 'Desconectado'}</strong></p>
-        <ul>
-            <li><a href="/connect">Conectar</a></li>
-            <li><a href="/qrcode">Ver QR Code</a></li>
-            <li><a href="/status">Status (JSON)</a></li>
-        </ul>
-        <hr>
-        <small>Node.js: ${process.version} | Baileys</small>
+        <!doctype html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>Uadezap API v${VERSION}</title>
+            <style>
+                :root {
+                    --bg: #0b1220;
+                    --card: #111a2b;
+                    --text: #e6edf3;
+                    --muted: #9fb0c3;
+                    --primary: #4f46e5;
+                    --primary-600: #4338ca;
+                    --border: #22304a;
+                    --ok: #22c55e;
+                    --warn: #f59e0b;
+                }
+                html[data-theme="light"] {
+                    --bg: #f6f7fb;
+                    --card: #ffffff;
+                    --text: #0b1220;
+                    --muted: #536174;
+                    --primary: #4f46e5;
+                    --primary-600: #4338ca;
+                    --border: #e5e7eb;
+                    --ok: #16a34a;
+                    --warn: #d97706;
+                }
+                * { box-sizing: border-box; }
+                body {
+                    margin: 0;
+                    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+                    background: radial-gradient(1200px 600px at 90% -10%, rgba(79,70,229,0.25), transparent 60%),
+                                radial-gradient(800px 400px at -10% 10%, rgba(16,185,129,0.18), transparent 60%),
+                                var(--bg);
+                    color: var(--text);
+                }
+                .container { max-width: 980px; margin: 0 auto; padding: 24px; }
+                .nav {
+                    display: flex; align-items: center; justify-content: space-between;
+                    gap: 12px; padding: 16px 0;
+                }
+                .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+                .chip { font-size: 12px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); }
+                .actions { display: flex; gap: 10px; align-items: center; }
+                .btn {
+                    appearance: none; border: 1px solid var(--border); background: var(--card); color: var(--text);
+                    padding: 10px 14px; border-radius: 10px; cursor: pointer; text-decoration: none; font-weight: 600;
+                    box-shadow: 0 1px 0 rgba(255,255,255,0.02) inset, 0 10px 30px rgba(0,0,0,0.15);
+                    transition: transform .06s ease, background .2s ease, border-color .2s ease;
+                }
+                .btn:hover { transform: translateY(-1px); border-color: var(--primary); }
+                .btn-primary { background: linear-gradient(180deg, var(--primary), var(--primary-600)); border-color: transparent; color: #fff; }
+                .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 20px; }
+                .card { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)), var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; }
+                .muted { color: var(--muted); }
+                .kvs { display: grid; grid-template-columns: 120px 1fr; gap: 8px 16px; margin-top: 12px; font-size: 14px; }
+                .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); }
+                .dot { width: 8px; height: 8px; border-radius: 999px; display: inline-block; }
+                .dot.ok { background: var(--ok); }
+                .dot.warn { background: var(--warn); }
+                .footer { margin-top: 26px; font-size: 12px; color: var(--muted); }
+                .toggle { display: inline-flex; align-items: center; gap: 8px; }
+            </style>
+            <script>
+                (function() {
+                    const saved = localStorage.getItem('theme');
+                    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    const theme = saved || (prefersDark ? 'dark' : 'light');
+                    if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+                    window.__toggleTheme = function() {
+                        const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+                        const next = isLight ? 'dark' : 'light';
+                        if (next === 'light') document.documentElement.setAttribute('data-theme', 'light');
+                        else document.documentElement.removeAttribute('data-theme');
+                        localStorage.setItem('theme', next);
+                        const btn = document.getElementById('theme-label');
+                        if (btn) btn.textContent = next === 'light' ? 'Modo escuro' : 'Modo claro';
+                    }
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const btn = document.getElementById('theme-label');
+                        if (btn) btn.textContent = (document.documentElement.getAttribute('data-theme') === 'light') ? 'Modo escuro' : 'Modo claro';
+                    });
+                })();
+            </script>
+        </head>
+        <body>
+            <div class="container">
+                <div class="nav">
+                    <div class="brand">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2C6.477 2 2 6.203 2 11.39c0 2.829 1.372 5.36 3.56 7.062L4.5 22l3.86-1.274A10.3 10.3 0 0 0 12 20.78c5.523 0 10-4.203 10-9.39C22 6.203 17.523 2 12 2Z" stroke="currentColor" stroke-width="1.3"/>
+                            <path d="M8.5 9.5c0-.552.53-1 1.185-1h.79c.329 0 .64.12.87.335l.322.298c.29.268.298.703.017.98l-.47.463a.9.9 0 0 0-.263.64v.07c0 .497.43.9.96.9h.86c.655 0 1.185.448 1.185 1s-.53 1-1.185 1H10c-1.38 0-2.5-1.007-2.5-2.25V9.5Z" fill="currentColor"/>
+                        </svg>
+                        Uadezap API
+                        <span class="chip">v${VERSION}</span>
+                    </div>
+                    <div class="actions">
+                        <button class="btn" onclick="__toggleTheme()"><span id="theme-label">Alternar tema</span></button>
+                        <a class="btn" href="/status">Status JSON</a>
+                        <a class="btn btn-primary" href="/connect">Conectar</a>
+                    </div>
+                </div>
+
+                <div class="grid">
+                    <div class="card">
+                        <h2 style="margin: 0 0 6px 0;">Status</h2>
+                        <div class="muted">Situação do WhatsApp e ambiente</div>
+                        <div style="margin-top: 12px; display: flex; gap: 10px; align-items: center;">
+                            <span class="badge"><span class="dot ${sock ? 'ok' : 'warn'}"></span>${sock ? 'Conectado' : 'Desconectado'}</span>
+                            <span class="badge"><span class="dot ok"></span>Node ${process.version}</span>
+                        </div>
+                        <div class="kvs">
+                            <div class="muted">Porta</div><div>${process.env.PORT || 8080}</div>
+                            <div class="muted">QR Code</div><div>${qrCodeData ? 'Disponível' : (sock ? '—' : 'Aguardando')}</div>
+                        </div>
+                        <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">
+                            <a class="btn" href="/qrcode">Ver QR Code</a>
+                            <a class="btn" href="/connect">${sock ? 'Reconectar' : 'Iniciar conexão'}</a>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h2 style="margin: 0 0 6px 0;">Como usar</h2>
+                        <div class="muted">Endpoints rápidos</div>
+                        <div class="kvs">
+                            <div class="muted">GET</div><div><code>/connect</code> — inicia a sessão</div>
+                            <div class="muted">GET</div><div><code>/qrcode</code> — exibe o QR code</div>
+                            <div class="muted">GET</div><div><code>/status</code> — status em JSON</div>
+                            <div class="muted">POST</div><div><code>/send-text</code> — enviar mensagem</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="footer">© 2025 Uadezap • Baileys • Easypanel Ready _ desenvolvido por LuanSouza de SIqueira - 2025</div>
+            </div>
+        </body>
+        </html>
     `);
 });
 
@@ -71,7 +200,7 @@ app.get('/status', (req, res) => {
         qr: !!qrCodeData,
         version: VERSION,
         node_version: process.version,
-        port: process.env.PORT || 3000
+        port: process.env.PORT || 8080
     });
 });
 
@@ -183,18 +312,74 @@ app.get('/qrcode', (req, res) => {
     if (!makeWASocket) {
         return res.status(500).send('<h3>❌ API carregando... Aguarde.</h3>');
     }
-    if (qrCodeData) {
-        res.type('html');
-        res.send(`
-            <img src="${qrCodeData}" width="300" />
-            <p><small>Escaneie com o WhatsApp → Dispositivos vinculados</small></p>
+    res.type('html');
+    const hasQr = !!qrCodeData;
+    const connected = !!sock;
+    res.send(`
+        <!doctype html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>QR Code • Uadezap</title>
             <meta http-equiv="refresh" content="5" />
-        `);
-    } else if (sock) {
-        res.send('<h3>✅ Conectado! Nenhum QR Code disponível.</h3>');
-    } else {
-        res.status(400).send('<h3>❌ Não há QR Code. Vá para <a href="/connect">/connect</a></h3>');
-    }
+            <style>
+                :root { --bg:#0b1220; --card:#111a2b; --text:#e6edf3; --muted:#9fb0c3; --primary:#4f46e5; --border:#22304a; }
+                html[data-theme="light"] { --bg:#f6f7fb; --card:#ffffff; --text:#0b1220; --muted:#536174; --primary:#4f46e5; --border:#e5e7eb; }
+                body{ margin:0; background:var(--bg); color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+                .container{ max-width:860px; margin:0 auto; padding:24px; }
+                .nav{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 0; }
+                .btn{ appearance:none; border:1px solid var(--border); background:var(--card); color:var(--text); padding:10px 14px; border-radius:10px; cursor:pointer; text-decoration:none; font-weight:600; }
+                .grid{ display:grid; grid-template-columns: 1fr; gap:16px; }
+                .card{ background:var(--card); border:1px solid var(--border); border-radius:16px; padding:18px; }
+                .muted{ color:var(--muted); }
+                .qrwrap{ display:flex; align-items:center; justify-content:center; min-height:300px; }
+            </style>
+            <script>
+                (function(){
+                    const saved = localStorage.getItem('theme');
+                    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    const theme = saved || (prefersDark ? 'dark' : 'light');
+                    if (theme === 'light') document.documentElement.setAttribute('data-theme','light');
+                    window.__toggleTheme = function(){
+                        const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+                        const next = isLight ? 'dark' : 'light';
+                        if (next === 'light') document.documentElement.setAttribute('data-theme','light'); else document.documentElement.removeAttribute('data-theme');
+                        localStorage.setItem('theme', next);
+                        const btn = document.getElementById('theme-label');
+                        if (btn) btn.textContent = next === 'light' ? 'Modo escuro' : 'Modo claro';
+                    }
+                    document.addEventListener('DOMContentLoaded', function(){
+                        const btn = document.getElementById('theme-label');
+                        if (btn) btn.textContent = (document.documentElement.getAttribute('data-theme') === 'light') ? 'Modo escuro' : 'Modo claro';
+                    });
+                })();
+            </script>
+        </head>
+        <body>
+            <div class="container">
+                <div class="nav">
+                    <div style="font-weight:700; display:flex; align-items:center; gap:10px;">Uadezap • QR Code</div>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <button class="btn" onclick="__toggleTheme()"><span id="theme-label">Alternar tema</span></button>
+                        <a class="btn" href="/">Início</a>
+                        <a class="btn" href="/connect">Conectar</a>
+                    </div>
+                </div>
+                <div class="grid">
+                    <div class="card">
+                        <div class="muted">Status: ${connected ? 'Conectado' : (hasQr ? 'Aguardando leitura' : 'Aguardando conexão')}</div>
+                        <div class="qrwrap">
+                            ${hasQr ? `<img src="${qrCodeData}" width="320" height="320" style="border-radius:12px; border:1px solid var(--border)" />` : `<div class="muted">${connected ? 'Nenhum QR Code disponível' : 'Vá para /connect para gerar o QR Code.'}</div>`}
+                        </div>
+                        <div class="muted">A página atualiza automaticamente a cada 5 segundos.</div>
+                    </div>
+                </div>
+                <div style="margin-top: 26px; font-size: 12px; color: var(--muted);">© 2025 Uadezap • Baileys • Easypanel Ready _ desenvolvido por LuanSouza de SIqueira - 2025</div>
+            </div>
+        </body>
+        </html>
+    `);
 });
 
 // Enviar mensagem (POST)

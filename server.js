@@ -80,7 +80,6 @@ async function connectToWhatsApp() {
 
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         // Processar apenas notificações de novas mensagens
-        if (type !== 'notify') return;
         const msg = messages[0];
         if (!msg.key || msg.key.fromMe) return;
 

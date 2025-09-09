@@ -103,10 +103,8 @@ async function connectToWhatsApp() {
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        customLog('DEBUG: Evento messages.upsert recebido. Tipo:', type, 'Mensagens:', messages);
         // Processar apenas notificações de novas mensagens
         const msg = messages[0];
-        customLog('DEBUG: Mensagem completa:', msg); // Adicionado para depuração
         if (!msg.key || msg.key.fromMe) return;
 
         // Deduplicar por ID da mensagem (evita envios duplos ao webhook)

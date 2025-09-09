@@ -39,8 +39,16 @@ let makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser;
         DisconnectReason = baileys.DisconnectReason;
         jidNormalizedUser = baileys.jidNormalizedUser;
         customLog('✅ Baileys carregado com sucesso');
-        // Inicia a conexão do WhatsApp automaticamente após o carregamento do Baileys
-        connectToWhatsApp().catch(err => console.error('❌ Erro ao iniciar conexão do WhatsApp:', err));
+        
+        // === INICIAR SERVIDOR ===
+        const PORT = parseInt(process.env.PORT) || 8080;
+        app.listen(PORT, () => {
+            customLog(`✅ Servidor rodando na porta ${PORT}`);
+            customLog(`🔗 Acesse: http://<seu-ip>:${PORT}/connect`);
+            // Inicia a conexão do WhatsApp automaticamente após o carregamento do Baileys
+            connectToWhatsApp().catch(err => console.error('❌ Erro ao iniciar conexão do WhatsApp:', err));
+        });
+
     } catch (err) {
         console.error('❌ Falha ao carregar @whiskeysockets/baileys:', err.message);
         console.error('💡 Certifique-se de que o pacote está instalado: npm install @whiskeysockets/baileys');
@@ -51,7 +59,7 @@ let makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser;
 // === CONFIGURAÇÕES ===
 const API_KEY = process.env.API_KEY || 'minha123senha';
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || null;
-const VERSION = '1.0.2';
+const VERSION = '1.0.3';
 
 async function connectToWhatsApp() {
     customLog('🔄 Tentando conectar ao WhatsApp...');
@@ -115,6 +123,8 @@ async function connectToWhatsApp() {
                             msg.message?.extendedTextMessage?.text ||
                             msg.message?.imageMessage?.caption ||
                             msg.message?.documentMessage?.caption ||
+                            msg.message?.ephemeralMessage?.message?.conversation || // Adicionado para WhatsApp Desktop
+                            msg.message?.ephemeralMessage?.message?.extendedTextMessage?.text || // Adicionado para WhatsApp Desktop
                             '[Mídia ou tipo não suportado]';
         const timestamp = msg.messageTimestamp;
 
@@ -423,11 +433,4 @@ app.post('/send-text', auth, async (req, res) => {
 app.post('/webhook-receive', auth, (req, res) => {
     customLog('📤 Webhook recebido:', req.body);
     res.status(200).json({ received: true });
-});
-
-// === INICIAR SERVIDOR ===
-const PORT = parseInt(process.env.PORT) || 8080;
-app.listen(PORT, () => {
-    customLog(`✅ Servidor rodando na porta ${PORT}`);
-    customLog(`🔗 Acesse: http://<seu-ip>:${PORT}/connect`);
 });

@@ -35,7 +35,98 @@ let makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser;
 // === CONFIGURAÇÕES ===
 const API_KEY = process.env.API_KEY || 'minha123senha';
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || null;
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
+
+async function connectToWhatsApp() {
+    console.log('🔄 Tentando conectar ao WhatsApp...');
+    const { state, saveCreds } = await useMultiFileAuthState('./auth_info_baileys');
+
+    sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: false,
+        syncFullHistory: false,
+        markOnlineOnConnect: true,
+        browser: ['Uadezap API', 'Chrome', '1.0.2']
+    });
+
+    sock.ev.on('connection.update', ({ qr, connection, lastDisconnect }) => {
+        if (qr) {
+            QRCode.toDataURL(qr, (err, url) => {
+                if (!err) qrCodeData = url;
+            });
+        }
+
+        if (connection === 'open') {
+            console.log('✅ WhatsApp conectado!');
+            qrCodeData = null;
+        }
+
+        if (connection === 'close') {
+            const shouldReconnect = new Boom(lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+            if (shouldReconnect) {
+                console.log('🔁 Reconectando...');
+                setTimeout(() => {
+                    sock = null;
+                    qrCodeData = null;
+                    connectToWhatsApp(); // Chama a função para reconectar
+                }, 3000);
+            } else {
+                console.log('❌ Conexão encerrada. Faça login novamente.');
+            }
+        }
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        // Processar apenas notificações de novas mensagens
+        if (type !== 'notify') return;
+        const msg = messages[0];
+        if (!msg.key || msg.key.fromMe) return;
+
+        // Deduplicar por ID da mensagem (evita envios duplos ao webhook)
+        const messageId = msg.key.id;
+        if (messageId && processedMessageIds.has(messageId)) return;
+        if (messageId) {
+            processedMessageIds.add(messageId);
+            if (processedMessageIds.size > 2000) processedMessageIds.clear();
+        }
+
+        const from = jidNormalizedUser(msg.key.remoteJid);
+        const pushName = msg.pushName || 'Desconhecido';
+        const textContent = msg.message?.conversation ||
+                            msg.message?.extendedTextMessage?.text ||
+                            msg.message?.imageMessage?.caption ||
+                            msg.message?.documentMessage?.caption ||
+                            '[Mídia ou tipo não suportado]';
+        const timestamp = msg.messageTimestamp;
+
+        const messageData = {
+            from,
+            pushName,
+            text: textContent.trim(),
+            timestamp,
+            type: 'incoming'
+        };
+
+        // Ignorar mensagens sem texto suportado (evita segundo evento com placeholder)
+        if (!messageData.text || messageData.text === '[Mídia ou tipo não suportado]') return;
+
+        console.log('📩 Recebido:', messageData);
+
+        if (N8N_WEBHOOK_URL) {
+            try {
+                await axios.post(N8N_WEBHOOK_URL, messageData, {
+                    timeout: 5000,
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                console.log(`✅ Enviado para webhook: ${from}`);
+            } catch (err) {
+                console.error('❌ Falha ao enviar ao n8n:', err.message);
+            }
+        }
+    });
+}
 
 // === MIDDLEWARE DE AUTENTICAÇÃO ===
 const auth = (req, res, next) => {
@@ -212,94 +303,7 @@ app.get('/connect', async (req, res) => {
     if (sock) return res.json({ status: 'already connected' });
 
     try {
-        const { state, saveCreds } = await useMultiFileAuthState('./auth_info_baileys');
-
-        sock = makeWASocket({
-            auth: state,
-            printQRInTerminal: false,
-            syncFullHistory: false,
-            markOnlineOnConnect: true,
-            browser: ['Uadezap API', 'Chrome', '1.0.2']
-        });
-
-        sock.ev.on('connection.update', ({ qr, connection, lastDisconnect }) => {
-            if (qr) {
-                QRCode.toDataURL(qr, (err, url) => {
-                    if (!err) qrCodeData = url;
-                });
-            }
-
-            if (connection === 'open') {
-                console.log('✅ WhatsApp conectado!');
-                qrCodeData = null;
-            }
-
-            if (connection === 'close') {
-                const shouldReconnect = new Boom(lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-                if (shouldReconnect) {
-                    console.log('🔁 Reconectando...');
-                    setTimeout(() => {
-                        sock = null;
-                        qrCodeData = null;
-                        app.get('/connect');
-                    }, 3000);
-                } else {
-                    console.log('❌ Conexão encerrada. Faça login novamente.');
-                }
-            }
-        });
-
-        sock.ev.on('creds.update', saveCreds);
-
-        sock.ev.on('messages.upsert', async ({ messages, type }) => {
-            // Processar apenas notificações de novas mensagens
-            if (type !== 'notify') return;
-            const msg = messages[0];
-            if (!msg.key || msg.key.fromMe) return;
-
-            // Deduplicar por ID da mensagem (evita envios duplos ao webhook)
-            const messageId = msg.key.id;
-            if (messageId && processedMessageIds.has(messageId)) return;
-            if (messageId) {
-                processedMessageIds.add(messageId);
-                if (processedMessageIds.size > 2000) processedMessageIds.clear();
-            }
-
-            const from = jidNormalizedUser(msg.key.remoteJid);
-            const pushName = msg.pushName || 'Desconhecido';
-            const textContent = msg.message?.conversation ||
-                                msg.message?.extendedTextMessage?.text ||
-                                msg.message?.imageMessage?.caption ||
-                                msg.message?.documentMessage?.caption ||
-                                '[Mídia ou tipo não suportado]';
-            const timestamp = msg.messageTimestamp;
-
-            const messageData = {
-                from,
-                pushName,
-                text: textContent.trim(),
-                timestamp,
-                type: 'incoming'
-            };
-
-            console.log('📩 Recebido:', messageData);
-
-            // Ignorar mensagens sem texto suportado (evita segundo evento com placeholder)
-            if (!messageData.text || messageData.text === '[Mídia ou tipo não suportado]') return;
-
-            if (N8N_WEBHOOK_URL) {
-                try {
-                    await axios.post(N8N_WEBHOOK_URL, messageData, {
-                        timeout: 5000,
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    console.log(`✅ Enviado para webhook: ${from}`);
-                } catch (err) {
-                    console.error('❌ Falha ao enviar ao n8n:', err.message);
-                }
-            }
-        });
-
+        await connectToWhatsApp(); // Chama a função para iniciar a conexão
         res.json({ status: 'connecting', qrcode: !!qrCodeData });
     } catch (err) {
         console.error('❌ Erro no /connect:', err);
@@ -409,4 +413,6 @@ const PORT = parseInt(process.env.PORT) || 8080;
 app.listen(PORT, () => {
     console.log(`✅ Servidor rodando na porta ${PORT}`);
     console.log(`🔗 Acesse: http://<seu-ip>:${PORT}/connect`);
+    // Inicia a conexão do WhatsApp automaticamente ao iniciar o servidor
+    connectToWhatsApp().catch(err => console.error('❌ Erro ao iniciar conexão do WhatsApp:', err));
 });

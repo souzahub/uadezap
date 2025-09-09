@@ -13,6 +13,20 @@ let sock = null;
 let qrCodeData = null;
 let processedMessageIds = new Set();
 
+// Contador para limpar o console
+let logCount = 0;
+const LOG_LIMIT = 10;
+
+function customLog(...args) {
+    console.log(...args);
+    logCount++;
+    if (logCount >= LOG_LIMIT) {
+        console.clear();
+        logCount = 0;
+        console.log('--- Console limpo (a cada 10 logs) ---');
+    }
+}
+
 // === Variáveis do Baileys (preenchidas via import dinâmico) ===
 let makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser;
 
@@ -24,7 +38,9 @@ let makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser;
         useMultiFileAuthState = baileys.useMultiFileAuthState;
         DisconnectReason = baileys.DisconnectReason;
         jidNormalizedUser = baileys.jidNormalizedUser;
-        console.log('✅ Baileys carregado com sucesso');
+        customLog('✅ Baileys carregado com sucesso');
+        // Inicia a conexão do WhatsApp automaticamente após o carregamento do Baileys
+        connectToWhatsApp().catch(err => console.error('❌ Erro ao iniciar conexão do WhatsApp:', err));
     } catch (err) {
         console.error('❌ Falha ao carregar @whiskeysockets/baileys:', err.message);
         console.error('💡 Certifique-se de que o pacote está instalado: npm install @whiskeysockets/baileys');
@@ -38,7 +54,7 @@ const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || null;
 const VERSION = '1.0.2';
 
 async function connectToWhatsApp() {
-    console.log('🔄 Tentando conectar ao WhatsApp...');
+    customLog('🔄 Tentando conectar ao WhatsApp...');
     const { state, saveCreds } = await useMultiFileAuthState('./auth_info_baileys');
 
     sock = makeWASocket({
@@ -57,21 +73,21 @@ async function connectToWhatsApp() {
         }
 
         if (connection === 'open') {
-            console.log('✅ WhatsApp conectado!');
+            customLog('✅ WhatsApp conectado!');
             qrCodeData = null;
         }
 
         if (connection === 'close') {
             const shouldReconnect = new Boom(lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
             if (shouldReconnect) {
-                console.log('🔁 Reconectando...');
+                customLog('🔁 Reconectando...');
                 setTimeout(() => {
                     sock = null;
                     qrCodeData = null;
                     connectToWhatsApp(); // Chama a função para reconectar
                 }, 3000);
             } else {
-                console.log('❌ Conexão encerrada. Faça login novamente.');
+                customLog('❌ Conexão encerrada. Faça login novamente.');
             }
         }
     });
@@ -111,7 +127,7 @@ async function connectToWhatsApp() {
         // Ignorar mensagens sem texto suportado (evita segundo evento com placeholder)
         if (!messageData.text || messageData.text === '[Mídia ou tipo não suportado]') return;
 
-        console.log('📩 Recebido:', messageData);
+        customLog('📩 Recebido:', messageData);
 
         if (N8N_WEBHOOK_URL) {
             try {
@@ -119,7 +135,7 @@ async function connectToWhatsApp() {
                     timeout: 5000,
                     headers: { 'Content-Type': 'application/json' }
                 });
-                console.log(`✅ Enviado para webhook: ${from}`);
+                customLog(`✅ Enviado para webhook: ${from}`);
             } catch (err) {
                 console.error('❌ Falha ao enviar ao n8n:', err.message);
             }
@@ -403,15 +419,13 @@ app.post('/send-text', auth, async (req, res) => {
 
 // Webhook de teste
 app.post('/webhook-receive', auth, (req, res) => {
-    console.log('📤 Webhook recebido:', req.body);
+    customLog('📤 Webhook recebido:', req.body);
     res.status(200).json({ received: true });
 });
 
 // === INICIAR SERVIDOR ===
 const PORT = parseInt(process.env.PORT) || 8080;
 app.listen(PORT, () => {
-    console.log(`✅ Servidor rodando na porta ${PORT}`);
-    console.log(`🔗 Acesse: http://<seu-ip>:${PORT}/connect`);
-    // Inicia a conexão do WhatsApp automaticamente ao iniciar o servidor
-    connectToWhatsApp().catch(err => console.error('❌ Erro ao iniciar conexão do WhatsApp:', err));
+    customLog(`✅ Servidor rodando na porta ${PORT}`);
+    customLog(`🔗 Acesse: http://<seu-ip>:${PORT}/connect`);
 });

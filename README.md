@@ -1,2 +1,2 @@
 # Uadezap
-Versao ( VPS Oline, EasyPanel )
+Versao ( VPS Online, EasyPanel )

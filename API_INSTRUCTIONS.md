@@ -80,7 +80,7 @@ curl -X POST \
   -H 'Content-Type: application/json' \
   -H 'X-API-KEY: minha123senha' \
   -d '{
-    "number": "5511999999999",
+    "number": "5522999569035",
     "video": "https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4",
     "caption": "Vídeo de teste via URL do N8N"
   }'

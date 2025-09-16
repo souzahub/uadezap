@@ -667,6 +667,39 @@ app.post('/send-document', auth, async (req, res) => {
     }
 });
 
+// Enviar localização
+app.post('/send-location', auth, async (req, res) => {
+    const { number, latitude, longitude, name, address } = req.body;
+    if (!sock) return res.status(500).json({ error: 'WhatsApp desconectado.' });
+    if (!number || !latitude || !longitude) return res.status(400).json({ error: 'Campos obrigatórios: number, latitude, longitude' });
+
+    try {
+        const id = number.includes('@s.whatsapp.net') ? number : `${number}@s.whatsapp.net`;
+
+        await sock.sendMessage(id, {
+            location: {
+                degreesLatitude: parseFloat(latitude),
+                degreesLongitude: parseFloat(longitude),
+                name: name || '',
+                address: address || ''
+            }
+        });
+        customLog(`📤 Localização enviada para: ${id} (${latitude}, ${longitude})`);
+        res.json({
+            success: true,
+            to: id,
+            type: 'location',
+            latitude,
+            longitude,
+            instance: sock.user?.id || 'unknown',
+            instanceName: sock.user?.name || 'Unknown'
+        });
+    } catch (err) {
+        customLog('❌ Erro ao enviar localização:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Webhook de teste
 app.post('/webhook-receive', auth, (req, res) => {
     customLog('📤 Webhook recebido:', req.body);

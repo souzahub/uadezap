@@ -59,7 +59,7 @@ let makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser;
 // === CONFIGURAÇÕES ===
 const API_KEY = process.env.API_KEY || 'minha123senha';
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || null;
-const VERSION = '1.0.4';
+const VERSION = '1.0.5';
 
 async function connectToWhatsApp() {
     customLog('🔄 Tentando conectar ao WhatsApp...');
@@ -582,16 +582,25 @@ app.post('/send-audio', auth, async (req, res) => {
         const id = number.includes('@s.whatsapp.net') ? number : `${number}@s.whatsapp.net`;
 
         let audioBuffer;
+        let mimetype = 'audio/mpeg'; // valor padrão (funciona para música/mp3)
+
         // Verifica se é uma URL (começa com http ou https)
         if (audio.startsWith('http://') || audio.startsWith('https://')) {
             customLog('🔄 Baixando áudio de URL...');
             const response = await axios.get(audio, { responseType: 'arraybuffer' });
             audioBuffer = Buffer.from(response.data);
             customLog(`✅ Áudio baixado de URL: ${audioBuffer.length} bytes`);
+
+            // tenta detectar pelo header HTTP
+            if (response.headers['content-type']) {
+                mimetype = response.headers['content-type'];
+            }
         } else if (audio.startsWith('data:audio/')) {
             // Se é base64, converter para buffer (removendo o prefixo data:audio/...)
             customLog('🔄 Decodificando áudio Base64...');
+            const meta = audio.substring(5, audio.indexOf(';')); // ex: audio/ogg; codecs=opus;base64
             audioBuffer = Buffer.from(audio.split(',')[1], 'base64');
+            mimetype = meta.split(';')[0]; // pega só o mimetype
             customLog(`✅ Áudio Base64 decodificado: ${audioBuffer.length} bytes`);
         } else {
             // Assumir que é uma string base64 pura (sem prefixo)
@@ -600,15 +609,24 @@ app.post('/send-audio', auth, async (req, res) => {
             customLog(`✅ Áudio Base64 decodificado: ${audioBuffer.length} bytes`);
         }
 
+        // Ajusta mimetype dependendo do tipo de envio
+        if (ptt) {
+            mimetype = 'audio/ogg; codecs=opus'; // obrigatório para sair como mensagem de voz no celular
+        }
+
         await sock.sendMessage(id, {
             audio: audioBuffer,
-            ptt: ptt // true para áudio de voz, false para música
+            mimetype,
+            ptt
         });
-        customLog(`📤 Áudio enviado para: ${id} (PTT: ${ptt})`);
+
+        customLog(`📤 Áudio enviado para: ${id} (PTT: ${ptt}, MIME: ${mimetype})`);
+
         res.json({
             success: true,
             to: id,
             type: 'audio',
+            mimetype,
             ptt,
             instance: sock.user?.id || 'unknown',
             instanceName: sock.user?.name || 'Unknown'

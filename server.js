@@ -4,6 +4,7 @@ const express = require('express');
 const { Boom } = require('@hapi/boom');
 const QRCode = require('qrcode');
 const axios = require('axios');
+const ffmpeg = require('fluent-ffmpeg'); // Adicionado para transcodificação de áudio
 const app = express();
 
 app.use(express.json({ limit: '10mb' }));
@@ -59,7 +60,7 @@ let makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser;
 // === CONFIGURAÇÕES ===
 const API_KEY = process.env.API_KEY || 'minha123senha';
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || null;
-const VERSION = '1.0.5';
+const VERSION = '1.0.6';
 
 async function connectToWhatsApp() {
     customLog('🔄 Tentando conectar ao WhatsApp...');
@@ -582,25 +583,17 @@ app.post('/send-audio', auth, async (req, res) => {
         const id = number.includes('@s.whatsapp.net') ? number : `${number}@s.whatsapp.net`;
 
         let audioBuffer;
-        let mimetype = 'audio/mpeg'; // valor padrão (funciona para música/mp3)
-
+        
         // Verifica se é uma URL (começa com http ou https)
         if (audio.startsWith('http://') || audio.startsWith('https://')) {
             customLog('🔄 Baixando áudio de URL...');
             const response = await axios.get(audio, { responseType: 'arraybuffer' });
             audioBuffer = Buffer.from(response.data);
             customLog(`✅ Áudio baixado de URL: ${audioBuffer.length} bytes`);
-
-            // tenta detectar pelo header HTTP
-            if (response.headers['content-type']) {
-                mimetype = response.headers['content-type'];
-            }
         } else if (audio.startsWith('data:audio/')) {
-            // Se é base64, converter para buffer (removendo o prefixo data:audio/...)
+            // Se é base64, converter para buffer (removendo o prefixo data:audio/...)     
             customLog('🔄 Decodificando áudio Base64...');
-            const meta = audio.substring(5, audio.indexOf(';')); // ex: audio/ogg; codecs=opus;base64
             audioBuffer = Buffer.from(audio.split(',')[1], 'base64');
-            mimetype = meta.split(';')[0]; // pega só o mimetype
             customLog(`✅ Áudio Base64 decodificado: ${audioBuffer.length} bytes`);
         } else {
             // Assumir que é uma string base64 pura (sem prefixo)
@@ -609,25 +602,59 @@ app.post('/send-audio', auth, async (req, res) => {
             customLog(`✅ Áudio Base64 decodificado: ${audioBuffer.length} bytes`);
         }
 
-        // Ajusta mimetype dependendo do tipo de envio
-        if (ptt) {
-            mimetype = 'audio/ogg; codecs=opus'; // obrigatório para sair como mensagem de voz no celular
-        }
-
-        await sock.sendMessage(id, {
-            audio: audioBuffer,
-            mimetype,
-            ptt
+        // --- Transcodificar para OPUS usando ffmpeg ---
+        customLog('🔄 Transcodificando áudio para OPUS...');
+        const opusBuffer = await new Promise((resolve, reject) => {
+            let buffers = [];
+            const command = ffmpeg();
+            
+            command
+                .input('pipe:0') // Usar pipe:0 para indicar que a entrada virá do stdin
+                .inputFormat('mp3') // Assumindo que a entrada é MP3 do Eleven Labs
+                .audioCodec('libopus')
+                .audioChannels(1) // Mono para mensagens de voz
+                .audioFrequency(16000) // Frequência comum para voz
+                .outputFormat('ogg') // Contêiner OGG para Opus
+                .on('error', (err) => {
+                    customLog('❌ Erro na transcodificação ffmpeg:', err.message);
+                    reject(new Error('Erro na transcodificação de áudio.'));
+                })
+                .on('end', () => {
+                    customLog('✅ Áudio transcodificado para OPUS.');
+                    resolve(Buffer.concat(buffers));
+                })
+                .pipe(
+                    new require('stream').Writable({
+                        write(chunk, encoding, callback) {
+                            buffers.push(chunk);
+                            callback();
+                        },
+                    }),
+                    { end: true }
+                );
+            
+            // Cria um stream de leitura a partir do audioBuffer e o pipa para o stdin do ffmpeg
+            const { Readable } = require('stream');
+            const audioStream = new Readable();
+            audioStream.push(audioBuffer);
+            audioStream.push(null); // Indica o fim do stream
+            audioStream.pipe(command.stdio[0]); // Pipa o buffer de áudio para o stdin do ffmpeg
         });
 
-        customLog(`📤 Áudio enviado para: ${id} (PTT: ${ptt}, MIME: ${mimetype})`);
+        await sock.sendMessage(id, {
+            audio: opusBuffer,
+            mimetype: 'audio/ogg; codecs=opus', // MimeType correto para Opus no OGG
+            ptt: true // Forçar como mensagem de voz para melhor compatibilidade
+        });
+
+        customLog(`📤 Áudio OPUS enviado para: ${id} (PTT: true)`);
 
         res.json({
             success: true,
             to: id,
             type: 'audio',
-            mimetype,
-            ptt,
+            mimetype: 'audio/ogg; codecs=opus',
+            ptt: true,
             instance: sock.user?.id || 'unknown',
             instanceName: sock.user?.name || 'Unknown'
         });

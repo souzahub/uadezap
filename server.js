@@ -59,7 +59,7 @@ let makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser;
 // === CONFIGURAÇÕES ===
 const API_KEY = process.env.API_KEY || 'minha123senha';
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || null;
-const VERSION = '1.0.3';
+const VERSION = '1.0.4';
 
 async function connectToWhatsApp() {
     customLog('🔄 Tentando conectar ao WhatsApp...');

@@ -60,7 +60,7 @@ let makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser;
 // === CONFIGURAÇÕES ===
 const API_KEY = process.env.API_KEY || 'minha123senha';
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || null;
-const VERSION = '1.0.6';
+const VERSION = '1.0.7';
 
 async function connectToWhatsApp() {
     customLog('🔄 Tentando conectar ao WhatsApp...');
@@ -606,10 +606,12 @@ app.post('/send-audio', auth, async (req, res) => {
         customLog('🔄 Transcodificando áudio para OPUS...');
         const opusBuffer = await new Promise((resolve, reject) => {
             let buffers = [];
-            const command = ffmpeg();
-            
-            command
-                .input('pipe:0') // Usar pipe:0 para indicar que a entrada virá do stdin
+            const { Readable } = require('stream');
+            const audioStream = new Readable();
+            audioStream.push(audioBuffer);
+            audioStream.push(null); // Indica o fim do stream
+
+            const command = ffmpeg(audioStream) // Passa o stream diretamente como entrada
                 .inputFormat('mp3') // Assumindo que a entrada é MP3 do Eleven Labs
                 .audioCodec('libopus')
                 .audioChannels(1) // Mono para mensagens de voz
@@ -632,13 +634,6 @@ app.post('/send-audio', auth, async (req, res) => {
                     }),
                     { end: true }
                 );
-            
-            // Cria um stream de leitura a partir do audioBuffer e o pipa para o stdin do ffmpeg
-            const { Readable } = require('stream');
-            const audioStream = new Readable();
-            audioStream.push(audioBuffer);
-            audioStream.push(null); // Indica o fim do stream
-            audioStream.pipe(command.stdio[0]); // Pipa o buffer de áudio para o stdin do ffmpeg
         });
 
         await sock.sendMessage(id, {

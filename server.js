@@ -356,7 +356,7 @@ app.get('/', (req, res) => {
                     </div>
                 </div>
 
-                <div class="footer">© 2025 Uadezap • Baileys • Easypanel Ready _ desenvolvido por LuanSouza de SIqueira - 2025</div>
+                <div class="footer">© 2025 Uadezap • Baileys • Easypanel Ready _ desenvolvido por Luan Souza de Siqueira - 2025</div>
             </div>
         </body>
         </html>
@@ -458,7 +458,7 @@ app.get('/qrcode', (req, res) => {
                         <div class="muted">A página atualiza automaticamente a cada 5 segundos.</div>
                     </div>
                 </div>
-                <div style="margin-top: 26px; font-size: 12px; color: var(--muted);">© 2025 Uadezap • Baileys • Easypanel Ready _ desenvolvido por LuanSouza de SIqueira - 2025</div>
+                <div style="margin-top: 26px; font-size: 12px; color: var(--muted);">© 2025 Uadezap • Baileys • Easypanel Ready _ desenvolvido por Luan Souza de Siqueira - 2025</div>
             </div>
         </body>
         </html>
